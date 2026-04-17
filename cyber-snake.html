@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBER SNAKE // 赛博贪吃蛇</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --neon-green: #00ff41;
+    --neon-cyan: #00f5ff;
+    --neon-pink: #ff006e;
+    --neon-yellow: #ffbe0b;
+    --dark-bg: #0a0a0f;
+    --grid-color: #0d1f0d;
+    --panel-bg: rgba(0, 255, 65, 0.04);
+    --border-glow: 0 0 10px rgba(0, 255, 65, 0.5), 0 0 20px rgba(0, 255, 65, 0.2);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--dark-bg);
+    color: var(--neon-green);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* 扫描线效果 */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 65, 0.015) 2px,
+      rgba(0, 255, 65, 0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* 角落装饰 */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 0% 0%, rgba(0,255,65,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 100%, rgba(0,245,255,0.06) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .game-wrapper {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  /* 标题 */
+  .title {
+    font-family: 'Orbitron', monospace;
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    color: var(--neon-green);
+    text-shadow: 0 0 10px var(--neon-green), 0 0 30px rgba(0,255,65,0.5), 0 0 60px rgba(0,255,65,0.2);
+    text-transform: uppercase;
+    animation: titlePulse 3s ease-in-out infinite;
+  }
+
+  .title span {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px var(--neon-cyan), 0 0 30px rgba(0,245,255,0.5);
+  }
+
+  @keyframes titlePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+  }
+
+  /* HUD 面板 */
+  .hud {
+    display: flex;
+    gap: 32px;
+    width: 100%;
+    justify-content: space-between;
+    padding: 0 4px;
+  }
+
+  .hud-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .hud-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: rgba(0,255,65,0.5);
+    text-transform: uppercase;
+  }
+
+  .hud-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-cyan);
+    min-width: 60px;
+  }
+
+  .hud-value.danger {
+    color: var(--neon-pink);
+    text-shadow: 0 0 8px var(--neon-pink);
+    animation: blink 0.5s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* 游戏画布容器 */
+  .canvas-container {
+    position: relative;
+    border: 1px solid rgba(0,255,65,0.3);
+    box-shadow: var(--border-glow), inset 0 0 30px rgba(0,255,65,0.03);
+    background: var(--dark-bg);
+  }
+
+  .canvas-container::before,
+  .canvas-container::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: var(--neon-cyan);
+    border-style: solid;
+    z-index: 2;
+  }
+
+  .canvas-container::before {
+    top: -1px; left: -1px;
+    border-width: 2px 0 0 2px;
+  }
+
+  .canvas-container::after {
+    bottom: -1px; right: -1px;
+    border-width: 0 2px 2px 0;
+  }
+
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  /* 控制提示 */
+  .controls {
+    display: flex;
+    gap: 24px;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: rgba(0,255,65,0.4);
+  }
+
+  .controls span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .key {
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid rgba(0,255,65,0.3);
+    border-radius: 3px;
+    color: var(--neon-green);
+    font-size: 0.6rem;
+    background: rgba(0,255,65,0.05);
+  }
+
+  /* 覆盖层（开始/结束） */
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 15, 0.92);
+    z-index: 50;
+    gap: 20px;
+    backdrop-filter: blur(2px);
+  }
+
+  .overlay.hidden { display: none; }
+
+  .overlay-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.8rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    text-align: center;
+  }
+
+  .overlay-title.game-over {
+    color: var(--neon-pink);
+    text-shadow: 0 0 15px var(--neon-pink), 0 0 40px rgba(255,0,110,0.4);
+  }
+
+  .overlay-title.start {
+    color: var(--neon-green);
+    text-shadow: 0 0 15px var(--neon-green), 0 0 40px rgba(0,255,65,0.4);
+  }
+
+  .overlay-score {
+    font-family: 'Orbitron', monospace;
+    font-size: 1rem;
+    color: var(--neon-cyan);
+    letter-spacing: 0.1em;
+  }
+
+  .overlay-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    padding: 12px 32px;
+    background: transparent;
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+    box-shadow: 0 0 10px rgba(0,255,65,0.2);
+  }
+
+  .overlay-btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0,255,65,0.15), transparent);
+    transition: left 0.4s;
+  }
+
+  .overlay-btn:hover {
+    background: rgba(0,255,65,0.1);
+    box-shadow: 0 0 20px rgba(0,255,65,0.4), inset 0 0 10px rgba(0,255,65,0.1);
+    color: #fff;
+  }
+
+  .overlay-btn:hover::before { left: 100%; }
+
+  .overlay-hint {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: rgba(0,255,65,0.35);
+  }
+
+  /* 等级指示器 */
+  .level-bar {
+    width: 100%;
+    height: 3px;
+    background: rgba(0,255,65,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .level-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
+    box-shadow: 0 0 6px var(--neon-green);
+    transition: width 0.3s ease;
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="game-wrapper">
+  <div class="title">CYBER<span>SNAKE</span></div>
+
+  <div class="hud">
+    <div class="hud-item">
+      <div class="hud-label">// SCORE</div>
+      <div class="hud-value" id="scoreDisplay">0000</div>
+    </div>
+    <div class="hud-item" style="align-items:center">
+      <div class="hud-label">// LEVEL</div>
+      <div class="hud-value" id="levelDisplay">01</div>
+    </div>
+    <div class="hud-item" style="align-items:flex-end">
+      <div class="hud-label">BEST //</div>
+      <div class="hud-value" id="bestDisplay">0000</div>
+    </div>
+  </div>
+
+  <div class="level-bar">
+    <div class="level-fill" id="levelFill" style="width:0%"></div>
+  </div>
+
+  <div class="canvas-container">
+    <canvas id="gameCanvas" width="480" height="480"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="overlay-title start" id="overlayTitle">CYBER SNAKE</div>
+      <div class="overlay-score" id="overlayScore">// NEURAL LINK READY //</div>
+      <button class="overlay-btn" id="startBtn" onclick="startGame()">[ JACK IN ]</button>
+      <div class="overlay-hint" id="overlayHint">WASD / 方向键 控制移动</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 移动</span>
+    <span><span class="key">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span> 移动</span>
+    <span><span class="key">P</span> 暂停</span>
+    <span><span class="key">SPACE</span> 开始/重启</span>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const GRID = 20;
+const COLS = canvas.width / GRID;
+const ROWS = canvas.height / GRID;
+
+// 游戏状态
+let snake, dir, nextDir, food, specialFood, score, best, level, gameLoop, paused, running;
+let particles = [];
+let glitchTimer = 0;
+let foodPulse = 0;
+
+// 从 localStorage 读取最高分
+best = parseInt(localStorage.getItem('cybersnake_best') || '0');
+
+function initGame() {
+  snake = [
+    { x: 12, y: 10 },
+    { x: 11, y: 10 },
+    { x: 10, y: 10 },
+  ];
+  dir = { x: 1, y: 0 };
+  nextDir = { x: 1, y: 0 };
+  score = 0;
+  level = 1;
+  paused = false;
+  running = false;
+  particles = [];
+  glitchTimer = 0;
+  foodPulse = 0;
+  specialFood = null;
+  spawnFood();
+  updateHUD();
+}
+
+function spawnFood() {
+  let pos;
+  do {
+    pos = {
+      x: Math.floor(Math.random() * COLS),
+      y: Math.floor(Math.random() * ROWS)
+    };
+  } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+  food = pos;
+
+  // 每50分有机会生成特殊食物
+  if (score > 0 && score % 50 === 0 && !specialFood) {
+    spawnSpecialFood();
+  }
+}
+
+function spawnSpecialFood() {
+  let pos;
+  do {
+    pos = {
+      x: Math.floor(Math.random() * COLS),
+      y: Math.floor(Math.random() * ROWS)
+    };
+  } while (snake.some(s => s.x === pos.x && s.y === pos.y) || (pos.x === food.x && pos.y === food.y));
+  specialFood = { ...pos, timer: 150 }; // 150帧后消失
+}
+
+function getSpeed() {
+  // 随等级加速
+  const speeds = [180, 160, 140, 120, 105, 90, 78, 68, 58, 50];
+  return speeds[Math.min(level - 1, speeds.length - 1)];
+}
+
+function startGame() {
+  if (gameLoop) clearInterval(gameLoop);
+  initGame();
+  running = true;
+  document.getElementById('overlay').classList.add('hidden');
+  gameLoop = setInterval(tick, getSpeed());
+}
+
+function tick() {
+  if (paused || !running) return;
+
+  dir = { ...nextDir };
+
+  const head = {
+    x: (snake[0].x + dir.x + COLS) % COLS,
+    y: (snake[0].y + dir.y + ROWS) % ROWS
+  };
+
+  // 碰到自身
+  if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    gameOver();
+    return;
+  }
+
+  snake.unshift(head);
+
+  let ate = false;
+
+  // 吃普通食物
+  if (head.x === food.x && head.y === food.y) {
+    ate = true;
+    const pts = level * 10;
+    score += pts;
+    spawnParticles(food.x * GRID + GRID/2, food.y * GRID + GRID/2, '#00ff41', 12);
+    spawnFood();
+    updateLevel();
+  }
+
+  // 吃特殊食物
+  if (specialFood && head.x === specialFood.x && head.y === specialFood.y) {
+    ate = true;
+    score += level * 30;
+    spawnParticles(specialFood.x * GRID + GRID/2, specialFood.y * GRID + GRID/2, '#ff006e', 20);
+    specialFood = null;
+    updateLevel();
+  }
+
+  if (!ate) snake.pop();
+
+  // 特殊食物计时
+  if (specialFood) {
+    specialFood.timer--;
+    if (specialFood.timer <= 0) specialFood = null;
+  }
+
+  updateHUD();
+  foodPulse += 0.12;
+  glitchTimer++;
+  updateParticles();
+  draw();
+}
+
+function updateLevel() {
+  const newLevel = Math.floor(score / 100) + 1;
+  if (newLevel !== level) {
+    level = newLevel;
+    clearInterval(gameLoop);
+    gameLoop = setInterval(tick, getSpeed());
+    // 升级闪光
+    glitchTimer = 0;
+  }
+}
+
+function updateHUD() {
+  const fmt = n => String(n).padStart(4, '0');
+  document.getElementById('scoreDisplay').textContent = fmt(score);
+  document.getElementById('levelDisplay').textContent = String(level).padStart(2, '0');
+  document.getElementById('bestDisplay').textContent = fmt(Math.max(score, best));
+
+  // 等级进度条
+  const progress = (score % 100) / 100 * 100;
+  document.getElementById('levelFill').style.width = progress + '%';
+}
+
+function gameOver() {
+  running = false;
+  clearInterval(gameLoop);
+
+  if (score > best) {
+    best = score;
+    localStorage.setItem('cybersnake_best', best);
+  }
+
+  // 死亡粒子爆炸
+  snake.forEach(s => {
+    spawnParticles(s.x * GRID + GRID/2, s.y * GRID + GRID/2, '#ff006e', 4);
+  });
+
+  // 最后渲染一帧
+  draw();
+
+  setTimeout(() => {
+    const overlay = document.getElementById('overlay');
+    document.getElementById('overlayTitle').textContent = 'SYSTEM CRASH';
+    document.getElementById('overlayTitle').className = 'overlay-title game-over';
+    document.getElementById('overlayScore').textContent =
+      `SCORE: ${String(score).padStart(4,'0')}  |  BEST: ${String(best).padStart(4,'0')}`;
+    document.getElementById('startBtn').textContent = '[ REBOOT ]';
+    document.getElementById('overlayHint').textContent = '按 SPACE 重新开始';
+    overlay.classList.remove('hidden');
+  }, 400);
+}
+
+// 粒子系统
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 / count) * i + Math.random() * 0.5;
+    const speed = 1.5 + Math.random() * 3;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.04 + Math.random() * 0.04,
+      color,
+      size: 2 + Math.random() * 2
+    });
+  }
+}
+
+function updateParticles() {
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.vx *= 0.95;
+    p.life -= p.decay;
+  });
+}
+
+// 绘制
+function draw() {
+  // 背景
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 网格
+  ctx.strokeStyle = 'rgba(0, 255, 65, 0.04)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= COLS; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x * GRID, 0);
+    ctx.lineTo(x * GRID, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= ROWS; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * GRID);
+    ctx.lineTo(canvas.width, y * GRID);
+    ctx.stroke();
+  }
+
+  // 偶尔故障效果
+  if (glitchTimer % 120 < 3) {
+    ctx.fillStyle = 'rgba(0, 245, 255, 0.03)';
+    const glitchY = Math.random() * canvas.height;
+    ctx.fillRect(0, glitchY, canvas.width, 2 + Math.random() * 4);
+  }
+
+  // 蛇身
+  snake.forEach((seg, i) => {
+    const t = i / snake.length;
+    const alpha = 1 - t * 0.6;
+
+    if (i === 0) {
+      // 蛇头 - 亮绿色
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#00ff41';
+      ctx.fillStyle = '#00ff41';
+      ctx.fillRect(seg.x * GRID + 1, seg.y * GRID + 1, GRID - 2, GRID - 2);
+
+      // 眼睛
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#0a0a0f';
+      const eyeOffset = dir.x !== 0 ? { ex: dir.x > 0 ? 12 : 4, ey1: 4, ey2: 12 } : { ex: 4, ey1: dir.y > 0 ? 12 : 4, ey2: dir.y > 0 ? 12 : 4 };
+      if (dir.x !== 0) {
+        ctx.fillRect(seg.x * GRID + (dir.x > 0 ? 12 : 4), seg.y * GRID + 4, 3, 3);
+        ctx.fillRect(seg.x * GRID + (dir.x > 0 ? 12 : 4), seg.y * GRID + 12, 3, 3);
+      } else {
+        ctx.fillRect(seg.x * GRID + 4, seg.y * GRID + (dir.y > 0 ? 12 : 4), 3, 3);
+        ctx.fillRect(seg.x * GRID + 12, seg.y * GRID + (dir.y > 0 ? 12 : 4), 3, 3);
+      }
+    } else {
+      // 蛇身 - 渐变青绿
+      const r = Math.floor(0 * (1-t) + 0 * t);
+      const g = Math.floor(255 * (1-t) + 180 * t);
+      const b = Math.floor(65 * (1-t) + 255 * t);
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = `rgba(${r},${g},${b},0.8)`;
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+
+      const padding = 2 + Math.floor(t * 2);
+      ctx.fillRect(
+        seg.x * GRID + padding,
+        seg.y * GRID + padding,
+        GRID - padding * 2,
+        GRID - padding * 2
+      );
+    }
+  });
+
+  ctx.shadowBlur = 0;
+
+  // 普通食物
+  const pulse = Math.sin(foodPulse) * 0.3 + 0.7;
+  const foodX = food.x * GRID + GRID / 2;
+  const foodY = food.y * GRID + GRID / 2;
+  const foodR = (GRID / 2 - 3) * pulse;
+
+  ctx.shadowBlur = 20 * pulse;
+  ctx.shadowColor = '#00ff41';
+  ctx.fillStyle = '#00ff41';
+  ctx.beginPath();
+  ctx.arc(foodX, foodY, foodR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 食物内部十字
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#0a0a0f';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(foodX - 3, foodY);
+  ctx.lineTo(foodX + 3, foodY);
+  ctx.moveTo(foodX, foodY - 3);
+  ctx.lineTo(foodX, foodY + 3);
+  ctx.stroke();
+
+  // 特殊食物（粉色菱形）
+  if (specialFood) {
+    const sf = specialFood;
+    const sfX = sf.x * GRID + GRID / 2;
+    const sfY = sf.y * GRID + GRID / 2;
+    const sfPulse = Math.sin(foodPulse * 1.5) * 0.4 + 0.6;
+    const sfAlpha = sf.timer < 50 ? sf.timer / 50 : 1;
+
+    ctx.shadowBlur = 25 * sfPulse;
+    ctx.shadowColor = `rgba(255, 0, 110, ${sfAlpha})`;
+    ctx.fillStyle = `rgba(255, 0, 110, ${sfAlpha})`;
+    ctx.beginPath();
+    ctx.moveTo(sfX, sfY - 8 * sfPulse);
+    ctx.lineTo(sfX + 6 * sfPulse, sfY);
+    ctx.lineTo(sfX, sfY + 8 * sfPulse);
+    ctx.lineTo(sfX - 6 * sfPulse, sfY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // 粒子
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+
+  // 暂停提示
+  if (paused) {
+    ctx.fillStyle = 'rgba(10, 10, 15, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = 'bold 24px Orbitron, monospace';
+    ctx.fillStyle = '#00f5ff';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#00f5ff';
+    ctx.textAlign = 'center';
+    ctx.fillText('// PAUSED //', canvas.width / 2, canvas.height / 2);
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'left';
+  }
+}
+
+// 键盘控制
+document.addEventListener('keydown', e => {
+  switch(e.key) {
+    case 'ArrowUp':    case 'w': case 'W':
+      if (dir.y !== 1) nextDir = { x: 0, y: -1 };
+      e.preventDefault(); break;
+    case 'ArrowDown':  case 's': case 'S':
+      if (dir.y !== -1) nextDir = { x: 0, y: 1 };
+      e.preventDefault(); break;
+    case 'ArrowLeft':  case 'a': case 'A':
+      if (dir.x !== 1) nextDir = { x: -1, y: 0 };
+      e.preventDefault(); break;
+    case 'ArrowRight': case 'd': case 'D':
+      if (dir.x !== -1) nextDir = { x: 1, y: 0 };
+      e.preventDefault(); break;
+    case 'p': case 'P':
+      if (running) paused = !paused;
+      break;
+    case ' ':
+      e.preventDefault();
+      if (!running) startGame();
+      else if (paused) paused = false;
+      break;
+  }
+});
+
+// 移动端触摸控制
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  if (!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx > 20 && dir.x !== -1) nextDir = { x: 1, y: 0 };
+    else if (dx < -20 && dir.x !== 1) nextDir = { x: -1, y: 0 };
+  } else {
+    if (dy > 20 && dir.y !== -1) nextDir = { x: 0, y: 1 };
+    else if (dy < -20 && dir.y !== 1) nextDir = { x: 0, y: -1 };
+  }
+  touchStart = null;
+  e.preventDefault();
+}, { passive: false });
+
+// 初始化
+initGame();
+draw();
+</script>
+</body>
+</html>
