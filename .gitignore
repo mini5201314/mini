@@ -1,0 +1,25 @@
+# 系统垃圾文件
+.DS_Store
+Thumbs.db
+*.log
+tmp/
+temp/
+
+# IDE 配置文件（VSCode/IDEA 等）
+.vscode/
+
+# 依赖包文件夹
+node_modules/
+
+# 构建产物
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+
+# 环境变量/密钥（绝对不能提交）
+.env
+.env.local
+.env.*.local
